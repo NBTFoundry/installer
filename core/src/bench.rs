@@ -14,6 +14,9 @@
 //! which travels on standard input after validation.
 
 pub const ROOT: &str = "/var/opt/nbt-manager";
+/// Applications' files (games, media) on the head unit's hard disk, which
+/// NBT Manager keeps apart from ROOT (manager docs/files-bridge.md).
+pub const FILES_ROOT: &str = "/mnt/share/nbt-manager";
 pub const PLUGINS: &str = "/opt/hmi/ID5/data/ro/Plugins";
 pub const CAPTURE: &str = "/opt/hmi/ID5/data/ro/NbtCapture";
 /// The capture shim since dev105, next to iDrive's environment file.
@@ -97,7 +100,7 @@ pub fn command(action: &Action) -> Option<String> {
         // With the shim present but no launcher, nothing is removed (starter.cfg
         // still names the shim).
         Action::RemoveAll => format!(
-            "(test ! -e {CAPTURE} -a ! -e {CAPTURE_SHIM} || {LAUNCHER} --remove-capture >/dev/null) && rm -rf {PLUGINS}/NbtManager {PLUGINS}/.NbtManager.setup {ROOT}; test ! -e {ROOT} && test ! -e {PLUGINS}/NbtManager && test ! -e {PLUGINS}/.NbtManager.setup && test ! -e {CAPTURE} && echo REMOVED"
+            "(test ! -e {CAPTURE} -a ! -e {CAPTURE_SHIM} || {LAUNCHER} --remove-capture >/dev/null) && rm -rf {PLUGINS}/NbtManager {PLUGINS}/.NbtManager.setup {ROOT} {FILES_ROOT}; test ! -e {ROOT} && test ! -e {FILES_ROOT} && test ! -e {PLUGINS}/NbtManager && test ! -e {PLUGINS}/.NbtManager.setup && test ! -e {CAPTURE} && echo REMOVED"
         ),
         Action::RestartIdrive => "OnOffDSICommander appreset".into(),
         Action::RestartHmiOnly => format!("{LAUNCHER} --restart-hmi"),
@@ -284,7 +287,9 @@ mod tests {
         assert!(removal.starts_with(
             "(test ! -e /opt/hmi/ID5/data/ro/NbtCapture -a ! -e /var/opt/nbt-manager/state/manager/libnbt-capture.so || /var/opt/nbt-manager/manager/nbt-manager-launcher --remove-capture >/dev/null) && rm -rf"
         ));
-        assert!(removal.contains("rm -rf /opt/hmi/ID5/data/ro/Plugins/NbtManager /opt/hmi/ID5/data/ro/Plugins/.NbtManager.setup /var/opt/nbt-manager; test ! -e"));
+        assert!(removal.contains("rm -rf /opt/hmi/ID5/data/ro/Plugins/NbtManager /opt/hmi/ID5/data/ro/Plugins/.NbtManager.setup /var/opt/nbt-manager /mnt/share/nbt-manager; test ! -e"));
+        // Applications' files on the hard disk go too.
+        assert!(removal.contains("test ! -e /mnt/share/nbt-manager &&"));
         assert!(removal.contains("test ! -e /opt/hmi/ID5/data/ro/NbtCapture"));
     }
 

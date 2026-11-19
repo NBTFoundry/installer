@@ -32,7 +32,7 @@ Part of [NBTFoundry](https://github.com/NBTFoundry):
 [manager](https://github.com/NBTFoundry/manager) (what it installs) ·
 [mobile-app](https://github.com/NBTFoundry/mobile-app) (phone app, shares the core) ·
 [sdk](https://github.com/NBTFoundry/sdk) (application SDK) ·
-[doom](https://github.com/NBTFoundry/doom) (example application)
+[nf-doom](https://github.com/NBTFoundry/nf-doom) (example application)
 
 Not affiliated with or endorsed by BMW AG. BMW, iDrive and NBT are trademarks of
 BMW AG.
@@ -164,9 +164,10 @@ restart the head unit; the application never reboots it on its own.
   whole head unit as switching the car off and on does. SSH goes down with it, so
   the installer disconnects; once the head unit is back, Connect offers to enable
   SSH again.
-- **Remove NBT Manager:** after a confirmation, deletes `/var/opt/nbt-manager`
-  and the plugin folders `Plugins/NbtManager` and `Plugins/.NbtManager.setup`
-  under `/opt/hmi/ID5/data/ro`, nothing else. Running copies keep their open
+- **Remove NBT Manager:** after a confirmation, deletes `/var/opt/nbt-manager`,
+  the applications' files on the hard disk (`/mnt/share/nbt-manager`) and the
+  plugin folders `Plugins/NbtManager` and `Plugins/.NbtManager.setup` under
+  `/opt/hmi/ID5/data/ro`, nothing else. Running copies keep their open
   files until the reboot that unloads the plugin.
 
 Logs and reports go to `Documents\NBT Manager logs` on Windows, else the
