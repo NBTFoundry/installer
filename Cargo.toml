@@ -1,0 +1,24 @@
+[package]
+name = "nbt-manager-installer"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["core", "mobile"]
+
+[dependencies]
+nbt-installer-core = { path = "core" }
+directories = "6"
+eframe = { version = "=0.37.0", default-features = false, features = ["clipboard", "default_fonts", "glow", "wayland", "x11"] }
+tokio = { version = "1", features = ["sync"] }
+zeroize = "1"
+
+# Shipped builds: no symbols (the Windows exe was 30 MB, 23 MB of it
+# symbols) and optimised for size, measured at 8.4 MB. Panics still unwind:
+# the gateway search runs on a blocking task whose panic is caught.
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
+codegen-units = 1

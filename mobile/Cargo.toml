@@ -1,0 +1,26 @@
+[package]
+name = "nbt-installer-mobile"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "The installer core for the phone app, through UniFFI."
+
+[lib]
+name = "nbt_installer"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+# Generates the Kotlin (later Swift) binding from the built library:
+# cargo run -p nbt-installer-mobile --features bindgen --bin uniffi-bindgen -- generate ...
+name = "uniffi-bindgen"
+path = "src/bindgen.rs"
+required-features = ["bindgen"]
+
+[features]
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+nbt-installer-core = { path = "../core" }
+tokio = { version = "1", features = ["sync"] }
+uniffi = "0.32"
+zeroize = "1"
