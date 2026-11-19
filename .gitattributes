@@ -3,3 +3,7 @@
 core/assets/** text eol=lf
 *.pub text eol=lf
 *.nbtr binary
+
+# Keep embedded license notices consistent across platforms.
+legal/NOTICE.txt text eol=lf
+legal/notices.json text eol=lf

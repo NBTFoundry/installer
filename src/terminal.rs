@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Opens an interactive OpenSSH session to the head unit in a terminal window,
 //! for debugging by hand. `ssh` is taken from the PATH (Windows ships it).
 //!

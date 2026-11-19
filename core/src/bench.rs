@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! Bench and in-car test tools: fixed remote commands for the debug log, the
 //! test application, the controller configuration and complete removal.
 //! Commands use only what the head unit's minimal image is known to have:

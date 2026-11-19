@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! The installer's working parts, shared by the desktop installer (the root
 //! crate) and the phone app (`mobile/`, through UniFFI): the SSH session with
 //! its install, update and test-tool steps, the HSFZ gateway search, the SSH

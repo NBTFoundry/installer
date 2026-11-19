@@ -1,4 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
 [package]
+license = "MPL-2.0"
 name = "nbt-installer-mobile"
 version = "0.1.0"
 edition = "2024"

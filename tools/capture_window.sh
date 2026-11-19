@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Screenshot of the installer's window for the README: docs/assets/installer.png.
 # Builds the installer with the test release fixture bundled (into
 # target/capture), opens it under Xvfb and frames the top of the window.

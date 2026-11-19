@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! The installer for the phone app: the Windows installer's SSH session,
 //! gateway search, activation relay and embedded release (`nbt-installer-core`)
 //! behind a small UniFFI interface. Kotlin (Swift later) starts a [`Session`]

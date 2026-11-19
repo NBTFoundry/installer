@@ -1,5 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+// SPDX-License-Identifier: GPL-3.0-or-later
 
+mod licenses;
 mod terminal;
 
 use nbt_installer_core::{
@@ -23,6 +25,7 @@ struct Line {
 }
 
 struct App {
+    licenses: licenses::View,
     host: String,
     port: String,
     user: String,
@@ -71,6 +74,7 @@ impl Default for App {
         let (bundle, release_message) = bundle::load();
         let test_app = bundle::test_app();
         Self {
+            licenses: licenses::View::default(),
             host: DEFAULT_HOST.into(),
             port: DEFAULT_PORT.to_string(),
             user: DEFAULT_USER.into(),
@@ -400,11 +404,16 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll();
+        self.licenses.show(ui.ctx());
         if self.receiver.is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("NBT Manager Installer");
+            ui.horizontal(|ui| {
+                ui.heading("NBT Manager Installer");
+                if ui.button("Licenses").clicked() { self.licenses.open(); }
+            });
+            ui.label(RichText::new(licenses::HEAD_UNIT_WARNING).color(ui.visuals().warn_fg_color));
             ui.add_space(8.0);
             // The connection details are built in; shown only on request.
             egui::CollapsingHeader::new("Connection settings")

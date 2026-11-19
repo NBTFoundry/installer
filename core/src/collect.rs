@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! "Collect everything": one read-only report of what a car run needs, over
 //! SSH, so no USB stick, shell or separate downloads are needed. Each section
 //! is one fixed command using only tools the car inventory ran on the head unit

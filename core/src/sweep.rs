@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! Finding the head unit when it does not answer at the configured address.
 //!
 //! The configured address is the head unit's link-local one, which is what it

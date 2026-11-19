@@ -1,4 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 [package]
+license = "GPL-3.0-or-later"
 name = "nbt-manager-installer"
 version = "0.1.0"
 edition = "2024"

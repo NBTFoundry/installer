@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! Every socket the installer opens, to the car or to the activation service.
 //!
 //! A computer leaves [`Networks`] unset: the car is on the ENET cable or the

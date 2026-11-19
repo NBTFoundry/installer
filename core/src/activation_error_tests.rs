@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 use super::*;
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;

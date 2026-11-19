@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! Check the actual SSH endpoint after the one approved activation attempt.
 use super::{Command, Event, SEARCH_AFTER_ACTIVATION, Settings, connect_elsewhere, connect_tcp};
 use std::{net::Ipv4Addr, sync::mpsc, time::Duration};

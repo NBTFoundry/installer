@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 #[path = "ssh_reconnect.rs"]
 mod reconnect;
 

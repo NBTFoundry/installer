@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 use rsa::{
     RsaPublicKey,
     pkcs1v15::{Signature, VerifyingKey},

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
@@ -6,6 +7,8 @@
 </p>
 
 <h1 align="center">NBT Manager Installer</h1>
+
+> **Warning: installing or modifying this software can brick your head unit. Recovery may require professional service or replacement, at your expense. Provided AS IS; use at your own risk, subject to applicable law.** [Read the risk and liability disclaimer](DISCLAIMER.md).
 
 <p align="center">
   <b>Put NBT Manager on the car from a laptop,</b><br>
@@ -281,3 +284,13 @@ first with `android_setsocknetwork`, and the activation service's socket to the
 second, resolving its name there with `android_getaddrinfofornetwork`. Gateway
 discovery and the head-unit search then use only the adapter network's addresses.
 A computer sets nothing and keeps the system's routes.
+
+## License
+
+Copyright (c) 2026 Fabien Poussin. The desktop installer, its tests, build scripts and documentation are licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE).
+
+Original NBTFoundry logos, artwork and screenshots are under **MPL-2.0**, including copies in other NBTFoundry repositories. Third-party code, fonts, game data and their notices retain their own terms. Copyright permission for artwork does not grant trademark rights or imply endorsement by BMW AG or id Software.
+
+See [legal/README.md](legal/README.md) for third-party license notices.
+
+The shared Rust core (`core/`) and mobile bindings (`mobile/`) are **MPL-2.0**, including their tests and build scripts; their directories contain the applicable LICENSE. This lets the MPL-licensed phone app use the same core.

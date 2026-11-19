@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! SSH activation relay, as the BMW SSH client does it: find the vehicle
 //! gateway by HSFZ discovery, then relay between it (port 6801) and the
 //! activation service.

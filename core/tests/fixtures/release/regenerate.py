@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MPL-2.0
 """Rebuilds the release fixtures of core/src/release.rs with NBT Manager's own
 packer, so the installer's verifier is tested against real packer output.
 

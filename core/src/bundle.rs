@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! The signed manager release and the test application embedded at build time
 //! (`build.rs`), verified again when they are loaded.
 

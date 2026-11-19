@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
 //! Wire primitives recovered from the shipped binary's relay serializer.
 //!
 //! Meanings of client tags 3, 4 and 6 are not yet established. Do not use
