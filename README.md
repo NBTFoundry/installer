@@ -1,14 +1,35 @@
-# NBT Manager Installer
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img src="docs/assets/logo-light.svg" alt="NBTFoundry" height="44">
+  </picture>
+</p>
+
+<h1 align="center">NBT Manager Installer</h1>
+
+<p align="center">
+  <b>Put NBT Manager on the car from a laptop,</b><br>
+  over the ENET cable: install, update, diagnose.
+</p>
+
+<p align="center">
+  <img src="docs/assets/installer.png" width="620"
+       alt="The installer's window: connection settings, Connect, Install and Update, test tools and the log">
+</p>
 
 Installs, updates and removes NBT Manager on a BMW NBT Evo (iDrive 6) head unit
 over SSH, from a computer on the car's ENET cable or a Wi-Fi ENET adapter. A Rust
 desktop application (egui) and the installer core it shares with the NBT Manager
 phone app.
 
+**Supported head units:** BMW NBT Evo (iDrive 6). Support for the earlier NBT
+may come later.
+
 Part of [NBTFoundry](https://github.com/NBTFoundry):
-[manager](https://github.com/NBTFoundry/manager) ·
-[mobile-app](https://github.com/NBTFoundry/mobile-app) ·
-[sdk](https://github.com/NBTFoundry/sdk) · [doom](https://github.com/NBTFoundry/doom)
+[manager](https://github.com/NBTFoundry/manager) (what it installs) ·
+[mobile-app](https://github.com/NBTFoundry/mobile-app) (phone app, shares the core) ·
+[sdk](https://github.com/NBTFoundry/sdk) (application SDK) ·
+[doom](https://github.com/NBTFoundry/doom) (example application)
 
 Not affiliated with or endorsed by BMW AG. BMW, iDrive and NBT are trademarks of
 BMW AG.
@@ -67,6 +88,10 @@ NBT_TEST_LAUNCHER_HOST="$(realpath ../manager/build/launcher-host)" \
 
 It installs into an empty manager root, then updates to a second release staged
 and applied by the uploaded launcher, with a temporary signing key.
+
+**README screenshot.** `tools/capture_window.sh` builds the installer with the
+test release fixture bundled (into `target/capture`) and renders
+`docs/assets/installer.png` under Xvfb (needs Xvfb, xwd and ImageMagick).
 
 ## Release builds
 
