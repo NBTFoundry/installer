@@ -1,6 +1,6 @@
-//! SSH activation relay, matching the reconstructed BMW SSH client in
-//! `../nbt_ssh` (which works on the car): find the vehicle gateway by HSFZ
-//! discovery, then relay between it (port 6801) and the activation service.
+//! SSH activation relay, as the BMW SSH client does it: find the vehicle
+//! gateway by HSFZ discovery, then relay between it (port 6801) and the
+//! activation service.
 //! Vehicle traffic is never persisted or logged; the service's status texts
 //! are shown to the user.
 use crate::{

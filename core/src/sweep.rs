@@ -8,11 +8,10 @@
 //! `169.254`, so the built-in address is unreachable and the head unit has to
 //! be found instead.
 //!
-//! Seen in captures on the car (2026-11-15): every module asks for an address
-//! with a host name naming it, `DIAGADR62BMWMAC001CD7A4F1CA` for the head unit
-//! (`10` is the gateway, `63` the module at `169.254.199.99`), and the gateway
-//! asks for the address an adapter gave it earlier, holding it until a server
-//! answers or the bus sleeps.
+//! Every module asks for an address with a host name naming it,
+//! `DIAGADR<nn>BMWMAC<mac>` (`62` is the head unit, `10` the gateway, `63` the
+//! module at `169.254.199.99`), and the gateway asks for the address an adapter
+//! gave it earlier, holding it until a server answers or the bus sleeps.
 //!
 //! Only networks where a vehicle gateway answered are searched, so an ordinary
 //! home or office network is never touched, and the gateways themselves are

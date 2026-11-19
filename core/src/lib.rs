@@ -1,5 +1,5 @@
-//! The installer's working parts, shared by the Windows installer (`desktop/`)
-//! and the phone app (`desktop/mobile/`, through UniFFI): the SSH session with
+//! The installer's working parts, shared by the desktop installer (the root
+//! crate) and the phone app (`mobile/`, through UniFFI): the SSH session with
 //! its install, update and test-tool steps, the HSFZ gateway search, the SSH
 //! activation relay, the head-unit search, and the signed manager release
 //! embedded at build time.
