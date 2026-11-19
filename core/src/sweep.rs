@@ -197,7 +197,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_search_waits_for_a_host_that_starts_accepting_late() {
-        let late = Ipv4Addr::new(127, 0, 0, 3);
+        // 127.0.0.1: macOS configures no other loopback address.
+        let late = Ipv4Addr::LOCALHOST;
         let port = std::net::TcpListener::bind((late, 0))
             .unwrap()
             .local_addr()

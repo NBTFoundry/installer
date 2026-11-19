@@ -1,0 +1,5 @@
+# Files the crates embed (include_str!, include_bytes!) keep LF line endings on
+# every platform: the controller config validator rejects CR.
+core/assets/** text eol=lf
+*.pub text eol=lf
+*.nbtr binary
