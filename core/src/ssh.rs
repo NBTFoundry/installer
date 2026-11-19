@@ -2443,9 +2443,19 @@ mod tests {
         }
     }
 
+    /* NBT Manager's release packer: $NBT_MANAGER_DIR/tools/package_release.py,
+     * by default in the sibling NBTFoundry/manager checkout. */
+    #[cfg(unix)]
+    fn manager_packer() -> PathBuf {
+        std::env::var_os("NBT_MANAGER_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../manager"))
+            .join("tools/package_release.py")
+    }
+
     #[cfg(unix)]
     #[test]
-    #[ignore = "requires NBT_TEST_LAUNCHER_HOST built with make build/launcher-host"]
+    #[ignore = "requires NBT_TEST_LAUNCHER_HOST (NBTFoundry/manager: make build/launcher-host)"]
     fn native_install_then_update_over_ssh() {
         use std::os::unix::fs::PermissionsExt;
         use std::process::{Command as ProcessCommand, Stdio};
@@ -2514,7 +2524,7 @@ mod tests {
         }
         let package = dir.join("release.nbtr");
         run(ProcessCommand::new("python3")
-            .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/package_release.py"))
+            .arg(manager_packer())
             .args([
                 "--version",
                 "v1",
@@ -2589,7 +2599,7 @@ mod tests {
         std::fs::write(plugin.join("NbtManager.manifest"), "NbtManager.manifest v2").unwrap();
         let package2 = dir.join("release2.nbtr");
         run(ProcessCommand::new("python3")
-            .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/package_release.py"))
+            .arg(manager_packer())
             .args([
                 "--version",
                 "v2",

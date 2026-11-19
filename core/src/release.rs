@@ -255,100 +255,43 @@ pub fn verify(
     })
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        fs,
-        path::PathBuf,
-        process::{Command, Stdio},
-        time::{SystemTime, UNIX_EPOCH},
-    };
 
-    fn run(command: &mut Command) {
-        let result = command
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .unwrap();
-        assert!(result.success());
+    /* Packages made by NBT Manager's own packer (tools/package_release.py), so
+     * the verifier is checked against real packer output; see
+     * tests/fixtures/release/regenerate.py. */
+    const PUBLIC: &[u8] = include_bytes!("../tests/fixtures/release/release.pub");
+    const RELEASE_V1: &[u8] = include_bytes!("../tests/fixtures/release/release-v1.nbtr");
+    const RELEASE_V2: &[u8] = include_bytes!("../tests/fixtures/release/release-v2.nbtr");
+    /* v1 with one manifest field broken and a valid signature: a sequence
+     * with a leading zero, malformed or out-of-order bridge lines, a path in
+     * the compatibility, a repeated field. */
+    const MALFORMED: [&[u8]; 8] = [
+        include_bytes!("../tests/fixtures/release/malformed-1.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-2.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-3.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-4.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-5.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-6.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-7.nbtr"),
+        include_bytes!("../tests/fixtures/release/malformed-8.nbtr"),
+    ];
+
+    /* The 128-byte ARM ELF stand-ins the fixtures were packed from. */
+    fn elf(object_type: u8) -> [u8; 128] {
+        let mut elf = [0u8; 128];
+        elf[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
+        elf[16] = object_type;
+        elf[18] = 40;
+        elf
     }
 
     #[test]
     fn verifies_real_packer_output_and_rejects_tampering() {
-        let dir = std::env::temp_dir().join(format!(
-            "nbt-release-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&dir).unwrap();
-        let key = dir.join("key.pem");
-        let public = dir.join("key.pub");
-        run(Command::new("openssl")
-            .args([
-                "genpkey",
-                "-algorithm",
-                "RSA",
-                "-pkeyopt",
-                "rsa_keygen_bits:3072",
-                "-out",
-            ])
-            .arg(&key));
-        run(Command::new("openssl")
-            .args(["pkey", "-in"])
-            .arg(&key)
-            .arg("-pubout")
-            .arg("-out")
-            .arg(&public));
-        let mut elf = [0u8; 128];
-        elf[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
-        elf[16] = 2;
-        elf[18] = 40;
-        for name in ["launcher", "gui", "worker"] {
-            fs::write(dir.join(name), elf).unwrap();
-        }
-        let plugin = dir.join("plugin");
-        fs::create_dir(&plugin).unwrap();
-        elf[16] = 3;
-        fs::write(plugin.join("libNbtManager.so"), elf).unwrap();
-        for name in [
-            "NbtManager.manifest",
-            "NbtManager.xml",
-            "NbtManager_ALL_Texts.zip",
-            "NbtManager_ALL_Images.zip",
-        ] {
-            fs::write(plugin.join(name), name).unwrap();
-        }
-        let package = dir.join("release.nbtr");
-        let tool = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/package_release.py");
-        run(Command::new("python3")
-            .arg(&tool)
-            .args([
-                "--version",
-                "v1",
-                "--sequence",
-                "1",
-                "--compat",
-                "demo-1",
-                "--key",
-            ])
-            .arg(&key)
-            .arg("--output")
-            .arg(&package)
-            .arg("--launcher")
-            .arg(dir.join("launcher"))
-            .arg("--gui")
-            .arg(dir.join("gui"))
-            .arg("--worker")
-            .arg(dir.join("worker"))
-            .arg("--plugin-dir")
-            .arg(&plugin));
-        let bytes = fs::read(package).unwrap();
-        let public = fs::read(public).unwrap();
-        let release = verify(&bytes, &public, Some("demo-1")).unwrap();
+        let bytes = RELEASE_V1.to_vec();
+        let release = verify(&bytes, PUBLIC, Some("demo-1")).unwrap();
         assert_eq!(
             (
                 release.version.as_str(),
@@ -357,107 +300,33 @@ mod tests {
             ),
             ("v1", 1, "demo-1")
         );
-        assert_eq!(
-            &bytes[release.launcher.clone()],
-            fs::read(dir.join("launcher")).unwrap()
-        );
-        assert!(verify(&bytes, &public, Some("other")).is_err());
+        assert_eq!(&bytes[release.launcher.clone()], elf(2).as_slice());
+        assert!(verify(&bytes, PUBLIC, Some("other")).is_err());
         for pos in [0, 16, bytes.len() - 1] {
             let mut tampered = bytes.clone();
             tampered[pos] ^= 1;
-            assert!(verify(&tampered, &public, None).is_err());
+            assert!(verify(&tampered, PUBLIC, None).is_err());
         }
-        assert!(verify(&bytes[..bytes.len() - 1], &public, None).is_err());
+        assert!(verify(&bytes[..bytes.len() - 1], PUBLIC, None).is_err());
         let mut extra = bytes.clone();
         extra.push(1);
-        assert!(verify(&extra, &public, None).is_err());
-        let manifest_size = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
-        let manifest_end = 16 + manifest_size;
-        let manifest = std::str::from_utf8(&bytes[16..manifest_end]).unwrap();
-        for malformed in [
-            manifest.replace("sequence=1\n", "sequence=01\n"),
-            manifest.replace(
-                "bridge=1.4|show,status,live-settings,most,gamepad,controller\n",
-                "bridge=1.00|\n",
-            ),
-            manifest.replace(
-                "bridge=1.4|show,status,live-settings,most,gamepad,controller\n",
-                "bridge=1.0|show,show\n",
-            ),
-            manifest.replace(
-                "bridge=1.4|show,status,live-settings,most,gamepad,controller\n",
-                "bridge=1.0|show,\n",
-            ),
-            manifest.replace(
-                "bridge=1.4|show,status,live-settings,most,gamepad,controller\n",
-                "bridge=2.0|\nbridge=1.0|\n",
-            ),
-            manifest.replace(
-                "bridge=1.4|show,status,live-settings,most,gamepad,controller\n",
-                "bridge=1.0|\nbridge=2.0|\nbridge=3.0|\n",
-            ),
-            manifest.replace("compat=demo-1\n", "compat=../etc\n"),
-            manifest.replace("version=v1\n", "version=v1\nversion=v1\n"),
-        ] {
-            use std::io::Write;
-            let mut signed = b"NBTRLS1\n".to_vec();
-            signed.extend_from_slice(&(malformed.len() as u32).to_be_bytes());
-            signed.extend_from_slice(&(SIGNATURE_SIZE as u32).to_be_bytes());
-            signed.extend_from_slice(malformed.as_bytes());
-            let mut child = Command::new("openssl")
-                .args(["dgst", "-sha256", "-sign"])
-                .arg(&key)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .spawn()
-                .unwrap();
-            child.stdin.take().unwrap().write_all(&signed).unwrap();
-            let signature = child.wait_with_output().unwrap();
-            assert!(signature.status.success());
-            signed.extend_from_slice(&signature.stdout);
-            signed.extend_from_slice(&bytes[manifest_end + SIGNATURE_SIZE..]);
-            assert!(verify(&signed, &public, None).is_err());
+        assert!(verify(&extra, PUBLIC, None).is_err());
+        for (index, malformed) in MALFORMED.iter().enumerate() {
+            assert!(
+                verify(malformed, PUBLIC, None).is_err(),
+                "malformed-{}.nbtr was accepted",
+                index + 1
+            );
         }
+
         // NBTRLS2 with capture_lib (component 9, ARM ET_DYN)
-        let mut cap_elf = [0u8; 128];
-        cap_elf[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
-        cap_elf[16] = 3;
-        cap_elf[18] = 40;
-        fs::write(dir.join("libnbt-capture.so"), cap_elf).unwrap();
-        let package_v2 = dir.join("release-v2.nbtr");
-        run(Command::new("python3")
-            .arg(&tool)
-            .args([
-                "--version",
-                "v2",
-                "--sequence",
-                "2",
-                "--compat",
-                "demo-1",
-                "--key",
-            ])
-            .arg(&key)
-            .arg("--output")
-            .arg(&package_v2)
-            .arg("--launcher")
-            .arg(dir.join("launcher"))
-            .arg("--gui")
-            .arg(dir.join("gui"))
-            .arg("--worker")
-            .arg(dir.join("worker"))
-            .arg("--plugin-dir")
-            .arg(&plugin)
-            .arg("--capture-lib")
-            .arg(dir.join("libnbt-capture.so")));
-        let bytes_v2 = fs::read(package_v2).unwrap();
-        let rel_v2 = verify(&bytes_v2, &public, Some("demo-1")).unwrap();
+        let rel_v2 = verify(RELEASE_V2, PUBLIC, Some("demo-1")).unwrap();
         assert_eq!((rel_v2.format_version, rel_v2.component_count), (2, 9));
-        assert_eq!(&bytes_v2[rel_v2.capture_lib.unwrap()], cap_elf.as_slice());
+        assert_eq!(&RELEASE_V2[rel_v2.capture_lib.unwrap()], elf(3).as_slice());
         assert!(supports_capability_format(
             b"formats=NBTRLS1,NBTRLS2\n",
             "NBTRLS2"
         ));
         assert!(!supports_capability_format(b"formats=NBTRLS1\n", "NBTRLS2"));
-        fs::remove_dir_all(dir).unwrap();
     }
 }

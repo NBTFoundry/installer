@@ -30,7 +30,7 @@ pub const LAUNCHER: &str = "/var/opt/nbt-manager/manager/nbt-manager-launcher";
 pub const TEST_APP: &str = "test";
 pub const CONFIG_MAX: usize = 1024;
 /// The documented controller settings, prefilled in the editors.
-pub const CONFIG_EXAMPLE: &str = include_str!("../../../config/controller.conf.example");
+pub const CONFIG_EXAMPLE: &str = include_str!("../assets/controller.conf.example");
 /// debug.log and debug.log.1, each at most 128 KiB plus a few lines.
 pub const LOG_MAX: usize = 300 * 1024;
 /// `sloginfo` text: the car's slogger keeps a 1 MiB binary buffer
