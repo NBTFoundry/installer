@@ -864,7 +864,7 @@ const UPDATE_STEPS: [&str; 6] = [
  * it stage the release (`--stage-update`) and replace the installed launcher
  * and iDrive plugin (`--refresh-setup`), always remove the staging folder and
  * always remount read-only. The installed launcher is not used: a launcher
- * older than the release's format (NBTRLS2) could not stage it. */
+ * older than the release's format (NBTRLS2, NBTRLS3) could not stage it. */
 async fn update(
     link: &Link,
     launcher: &'static [u8],

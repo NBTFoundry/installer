@@ -8,6 +8,8 @@ packer, so the installer's verifier is tested against real packer output.
 Writes, next to this script:
   release-v1.nbtr       NBTRLS1: launcher, gui, worker and the iDrive plugin
   release-v2.nbtr       NBTRLS2: the same plus the capture library
+  release-v3.nbtr       NBTRLS3: the capture library, nbt-runner and a named
+                        component no verifier knows (only hashed)
   malformed-N.nbtr      v1 with one manifest field broken, validly signed
   release.pub           the public half of a throwaway key (the private half
                         is deleted; nothing secret is kept)
@@ -28,7 +30,9 @@ INSTALLER = HERE.parents[3]
 MANAGER = Path(os.environ.get("NBT_MANAGER_DIR", INSTALLER.parent / "manager")).resolve()
 PACKER = MANAGER / "tools" / "package_release.py"
 SIGNATURE_SIZE = 384
-BRIDGE_LINE = "bridge=1.4|show,status,live-settings,most,gamepad,controller\n"
+sys.path.insert(0, str(MANAGER / "tools"))
+import bridge  # noqa: E402  the packer's default bridge line
+BRIDGE_LINE = f"bridge={bridge.CURRENT[0]}\n"
 
 
 def elf(object_type):
@@ -40,13 +44,15 @@ def elf(object_type):
     return bytes(data)
 
 
-def pack(work, key, output, version, sequence, capture=False):
+def pack(work, key, output, version, sequence, capture=False, named=()):
     command = [sys.executable, str(PACKER), "--version", version, "--sequence", str(sequence),
                "--compat", "demo-1", "--key", str(key), "--output", str(output),
                "--launcher", str(work / "launcher"), "--gui", str(work / "gui"),
                "--worker", str(work / "worker"), "--plugin-dir", str(work / "plugin")]
     if capture:
         command += ["--capture-lib", str(work / "libnbt-capture.so")]
+    for name in named:
+        command += ["--component", f"{name}={work / name}"]
     subprocess.run(command, check=True)
 
 
@@ -75,10 +81,15 @@ def main():
                      "NbtManager_ALL_Images.zip"):
             (plugin / name).write_bytes(name.encode())
         (work / "libnbt-capture.so").write_bytes(elf(3))
+        (work / "runner").write_bytes(elf(2))
+        (work / "later_data").write_bytes(b"a later release's data, only hashed")
 
+        for old in HERE.glob("release-v*.nbtr"):
+            old.unlink()  # the packer never overwrites
         v1 = HERE / "release-v1.nbtr"
         pack(work, key, v1, "v1", 1)
         pack(work, key, HERE / "release-v2.nbtr", "v2", 2, capture=True)
+        pack(work, key, HERE / "release-v3.nbtr", "v3", 3, capture=True, named=("runner", "later_data"))
 
         data = v1.read_bytes()
         manifest_size = struct.unpack(">I", data[8:12])[0]

@@ -8,7 +8,9 @@ use rsa::{
 };
 use sha2::{Digest, Sha256};
 
-const ROLES_V1: [&str; 8] = [
+/* The fixed roles of every format; NBTRLS2 adds capture_lib, NBTRLS3 up to
+ * eight named components (NBT Manager's docs/manager-release.md). */
+const ROLES: [&str; 8] = [
     "launcher",
     "gui",
     "worker",
@@ -18,17 +20,9 @@ const ROLES_V1: [&str; 8] = [
     "plugin_text",
     "plugin_images",
 ];
-const ROLES_V2: [&str; 9] = [
-    "launcher",
-    "gui",
-    "worker",
-    "plugin_lib",
-    "plugin_manifest",
-    "plugin_xml",
-    "plugin_text",
-    "plugin_images",
-    "capture_lib",
-];
+const CAPTURE: &str = "capture_lib";
+const RUNNER: &str = "runner";
+const MAX_NAMED: usize = 8;
 const SIGNATURE_SIZE: usize = 384;
 const MAX_MANIFEST: usize = 4096;
 const MAX_COMPONENT: u64 = 64 * 1024 * 1024;
@@ -139,6 +133,23 @@ pub fn hash_hex(data: &[u8]) -> String {
     out
 }
 
+/* A named component: [a-z][a-z0-9_]{0,23}. */
+fn component_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 24
+        && name.as_bytes()[0].is_ascii_lowercase()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/* The name the next manifest line gives as `<name>_size=`. */
+fn next_name(line: &str) -> Option<&str> {
+    line.split_once('=')
+        .and_then(|(key, _)| key.strip_suffix("_size"))
+        .filter(|name| component_name(name))
+}
+
 fn arm_elf(data: &[u8], plugin: bool) -> bool {
     data.len() >= 52
         && &data[..7] == b"\x7fELF\x01\x01\x01"
@@ -158,9 +169,10 @@ pub fn verify(
     if bytes.len() < 16 {
         return Err("invalid release header");
     }
-    let (format_version, roles): (u8, &[&str]) = match &bytes[..8] {
-        b"NBTRLS1\n" => (1, &ROLES_V1),
-        b"NBTRLS2\n" => (2, &ROLES_V2),
+    let format_version: u8 = match &bytes[..8] {
+        b"NBTRLS1\n" => 1,
+        b"NBTRLS2\n" => 2,
+        b"NBTRLS3\n" => 3,
         _ => return Err("invalid release header"),
     };
     let len = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
@@ -211,13 +223,32 @@ pub fn verify(
         bridge_line(field(&mut lines, "bridge")?, &mut previous)?;
         bridge_count += 1;
     }
+    let mut names: Vec<&str> = ROLES.to_vec();
+    if format_version == 2 {
+        names.push(CAPTURE);
+    }
     let mut pos = payload_start;
     let mut total = 0u64;
     let mut launcher = 0..0;
     let mut capture_lib = None;
-    for (index, role) in roles.iter().enumerate() {
-        let is_elf = index < 4 || index == 8;
-        let must_be_so = index == 3 || index == 8;
+    let mut index = 0;
+    loop {
+        if index == names.len() {
+            // NBTRLS3: named components after the fixed roles, until the end.
+            let Some(&line) = lines.peek().filter(|_| format_version == 3) else {
+                break;
+            };
+            let name = next_name(line).ok_or("invalid component")?;
+            if names.contains(&name) || names.len() == ROLES.len() + MAX_NAMED {
+                return Err("invalid component");
+            }
+            names.push(name);
+        }
+        let role = names[index];
+        // The fixed programs and the named ones this installer knows are ARM
+        // ELF; any other named component is only hashed.
+        let is_elf = index < 4 || role == CAPTURE || role == RUNNER;
+        let must_be_so = index == 3 || role == CAPTURE;
         let size = number(field(&mut lines, &format!("{role}_size"))?)?;
         let hash = field(&mut lines, &format!("{role}_sha256"))?;
         if !valid_hash(hash) || size > MAX_COMPONENT || (is_elf && size < 52) {
@@ -233,7 +264,7 @@ pub fn verify(
             .ok_or("truncated release")?;
         if index == 0 {
             launcher = pos..end;
-        } else if index == 8 {
+        } else if role == CAPTURE {
             capture_lib = Some(pos..end);
         }
         let payload = &bytes[pos..end];
@@ -241,6 +272,7 @@ pub fn verify(
             return Err("invalid component");
         }
         pos = end;
+        index += 1;
     }
     if lines.next().is_some() || pos != bytes.len() {
         return Err("unexpected release data");
@@ -250,7 +282,7 @@ pub fn verify(
         sequence,
         compatibility: compat.to_owned(),
         format_version,
-        component_count: roles.len(),
+        component_count: names.len(),
         launcher,
         capture_lib,
     })
@@ -266,6 +298,8 @@ mod tests {
     const PUBLIC: &[u8] = include_bytes!("../tests/fixtures/release/release.pub");
     const RELEASE_V1: &[u8] = include_bytes!("../tests/fixtures/release/release-v1.nbtr");
     const RELEASE_V2: &[u8] = include_bytes!("../tests/fixtures/release/release-v2.nbtr");
+    /* NBTRLS3: capture_lib, runner and a component this installer does not know. */
+    const RELEASE_V3: &[u8] = include_bytes!("../tests/fixtures/release/release-v3.nbtr");
     /* v1 with one manifest field broken and a valid signature: a sequence
      * with a leading zero, malformed or out-of-order bridge lines, a path in
      * the compatibility, a repeated field. */
@@ -329,5 +363,22 @@ mod tests {
             "NBTRLS2"
         ));
         assert!(!supports_capability_format(b"formats=NBTRLS1\n", "NBTRLS2"));
+
+        // NBTRLS3: named components, an unknown one only hashed
+        let rel_v3 = verify(RELEASE_V3, PUBLIC, Some("demo-1")).unwrap();
+        assert_eq!((rel_v3.format_version, rel_v3.component_count), (3, 11));
+        assert_eq!(&RELEASE_V3[rel_v3.capture_lib.unwrap()], elf(3).as_slice());
+        let mut tampered = RELEASE_V3.to_vec();
+        let last = tampered.len() - 1;
+        tampered[last] ^= 1;
+        assert!(verify(&tampered, PUBLIC, None).is_err());
+        // The NBTRLS3 manifest under another header: refused.
+        let mut relabelled = RELEASE_V3.to_vec();
+        relabelled[6] = b'2';
+        assert!(verify(&relabelled, PUBLIC, None).is_err());
+        assert!(next_name("runner_size=52").is_some());
+        assert!(next_name("Runner_size=52").is_none());
+        assert!(next_name("runner_sha256=00").is_none());
+        assert!(next_name(&format!("{}_size=1", "a".repeat(25))).is_none());
     }
 }
