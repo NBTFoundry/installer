@@ -504,7 +504,7 @@ impl eframe::App for App {
                     ui.horizontal_wrapped(|ui| {
                         if ui
                             .button("Collect everything")
-                            .on_hover_text("Saves one file with the debug and system logs, the audio connections, the processes and the manager's files. Reads only.")
+                            .on_hover_text("Saves one file with the debug and system logs, the applications' logs, the audio connections, the processes and the manager's files. Reads only.")
                             .clicked()
                         {
                             self.bench(bench::Action::CollectAll);

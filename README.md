@@ -144,7 +144,8 @@ restart the head unit; the application never reboots it on its own.
 - **Collect everything:** one read-only report over SSH, saved as
   `collect-<time>.txt` in the logs folder. Each section has its command, output,
   standard error and exit status: `uname -a` and `mount`, the debug log,
-  `sloginfo`, `audioconn -l`, `pidin arg`, the process manager's overview, the
+  `sloginfo`, each application's log (`state/<app>/output.log.1` and
+  `output.log`), `audioconn -l`, `pidin arg`, the process manager's overview, the
   capture shim's state and files, and `ls -lR` of the manager's folders and
   `/dev/shmem`. A section that fails or times out is noted and the others still
   run (`core/src/collect.rs`). Read a report before sharing it: the system log can

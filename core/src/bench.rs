@@ -68,8 +68,9 @@ pub enum Action {
     /// Turns the automatic shim on again (after it failed or was turned off),
     /// or off.
     Shim(bool),
-    /// One read-only report of what a car run needs (collect.rs): the logs,
-    /// the audio connections, the processes and the manager's files.
+    /// One read-only report of what a car run needs (collect.rs): the logs
+    /// (the applications' too), the audio connections, the processes and the
+    /// manager's files.
     CollectAll,
 }
 
@@ -235,7 +236,7 @@ pub fn done(action: &Action, bytes: usize) -> String {
         Action::TryShim => "iDrive ran 20 s with the shim; it keeps it for the next starts.".into(),
         Action::Shim(true) => "Shim on: iDrive loads it at its next start and keeps it after 60 s of running.".into(),
         Action::Shim(false) => "Shim off: iDrive starts without it from its next start.".into(),
-        Action::CollectAll => format!("Collected {bytes} bytes: logs, audio connections, processes and the manager's files."),
+        Action::CollectAll => format!("Collected {bytes} bytes: logs (the applications' too), audio connections, processes and the manager's files."),
     }
 }
 

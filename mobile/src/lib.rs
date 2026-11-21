@@ -237,11 +237,18 @@ pub enum Tool {
     FetchLog,
     FetchSystemLog,
     ProvisionTestApp,
-    WriteConfig { text: String },
+    WriteConfig {
+        text: String,
+    },
     RemoveConfig,
     RemoveAll,
     RestartIdrive,
     CollectAll,
+    /// The automatic capture shim on again (after it failed or was turned off),
+    /// or off, as the Windows installer's Shim on and Shim off.
+    Shim {
+        on: bool,
+    },
 }
 
 #[derive(uniffi::Object)]
@@ -318,6 +325,7 @@ impl Session {
             Tool::RemoveAll => bench::Action::RemoveAll,
             Tool::RestartIdrive => bench::Action::RestartIdrive,
             Tool::CollectAll => bench::Action::CollectAll,
+            Tool::Shim { on } => bench::Action::Shim(on),
         };
         self.commands
             .send(ssh::Command::Bench {

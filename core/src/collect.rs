@@ -2,11 +2,15 @@
 //! "Collect everything": one read-only report of what a car run needs, over
 //! SSH, so no USB stick, shell or separate downloads are needed. Each section
 //! is one fixed command using only tools the car inventory ran on the head unit
-//! (cat, ls, mount, uname, pidin, sloginfo, audioconn -l), with its own size
+//! (cat, ls, mount, uname, pidin, sloginfo, audioconn -l) and the shell's
+//! built-ins (for, if, test, echo), with its own size
 //! limit and timeout; a section that fails is noted and the rest still run.
 //! Nothing here writes on the head unit.
 
 use crate::bench::{LOG_MAX, ROOT, SYSTEM_LOG_MAX};
+
+/// 16 applications, two logs of 64 KiB each, and their name lines.
+const APP_LOGS_MAX: usize = 16 * 2 * 64 * 1024 + 16 * 1024;
 
 pub struct Section {
     pub name: &'static str,
@@ -37,6 +41,17 @@ pub fn sections() -> Vec<Section> {
             60,
         ),
         section("system log", "sloginfo".into(), SYSTEM_LOG_MAX, 300),
+        // Each application's log (manager PROTOCOL.md, "Logs"): output.log.1
+        // then output.log, at most 64 KiB each, for at most 16 applications.
+        section(
+            "application logs",
+            format!(
+                "for d in {ROOT}/state/*; do for f in $d/output.log.1 $d/output.log; do \
+                 if test -f $f; then echo \"--- $f\"; cat $f; fi; done; done; exit 0"
+            ),
+            APP_LOGS_MAX,
+            60,
+        ),
         // Read only: -l lists; only -b/-r build or remove a connection. As in
         // tools/car_inventory.sh: both places it may be (which one the car
         // uses is not established), stopped after 10 s if the car's
@@ -156,11 +171,20 @@ mod tests {
         let audio = all.iter().find(|s| s.name == "audio connections").unwrap();
         assert!(audio.command.contains("LD_PRELOAD= $a -l &"));
         assert!(!audio.command.contains(" -b") && !audio.command.contains(" -r"));
+        // Every application's log, the older file first, each named.
+        let apps = all.iter().find(|s| s.name == "application logs").unwrap();
+        assert_eq!(
+            apps.command,
+            "for d in /var/opt/nbt-manager/state/*; do for f in $d/output.log.1 $d/output.log; do \
+             if test -f $f; then echo \"--- $f\"; cat $f; fi; done; done; exit 0"
+        );
+        assert!(apps.limit >= 16 * 2 * 64 * 1024);
     }
 
     #[test]
     fn a_report_names_each_section_and_its_outcome() {
         let all = sections();
+        let named = |name: &str| all.iter().find(|s| s.name == name).unwrap();
         let mut report = title(42);
         let output = |stdout, stderr, exit, truncated| Output {
             stdout,
@@ -170,15 +194,15 @@ mod tests {
         };
         append(
             &mut report,
-            &all[0],
+            named("system"),
             Ok(output(b"QNX\n", b"", Some(0), false)),
         );
         append(
             &mut report,
-            &all[3],
+            named("audio connections"),
             Ok(output(b"list", b"warn\n", Some(1), true)),
         );
-        append(&mut report, &all[4], Err("timed out"));
+        append(&mut report, named("processes"), Err("timed out"));
         let text = String::from_utf8(report).unwrap();
         assert!(text.starts_with("NBT Manager collection, 42 s"));
         assert!(text.contains("===== system =====\n$ uname -a; mount\nQNX\n----- exit 0 -----\n"));
