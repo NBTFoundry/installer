@@ -2981,10 +2981,12 @@ mod tests {
                 .build()
                 .unwrap();
             runtime.block_on(async move {
-                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-                send.send(listener.local_addr().unwrap().port()).unwrap();
+                // An unoptimised RSA key generation takes 1 to 15 s or more:
+                // before the port is sent, so the client's waits never include it.
                 let key =
                     PrivateKey::random(&mut rand::rng(), Algorithm::Rsa { hash: None }).unwrap();
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                send.send(listener.local_addr().unwrap().port()).unwrap();
                 let config = server::Config {
                     keys: vec![key],
                     preferred: Preferred {
@@ -3019,7 +3021,7 @@ mod tests {
                 .await;
             });
         });
-        let port = receive.recv_timeout(Duration::from_secs(5)).unwrap();
+        let port = receive.recv_timeout(Duration::from_secs(120)).unwrap();
         let (commands, _receive) = connect_trusted(port);
         commands.send(Command::Disconnect).unwrap();
     }

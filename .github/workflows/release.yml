@@ -48,7 +48,7 @@ jobs:
           - platform: windows-x64
             os: ubuntu-24.04
           - platform: macos
-            os: macos-15
+            os: macos-latest
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
