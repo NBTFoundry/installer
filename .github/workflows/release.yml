@@ -1,0 +1,128 @@
+# Downloadable installers from a vMAJOR.MINOR.PATCH tag (the version in
+# Cargo.toml): Windows, macOS (universal) and Linux, each carrying the NBT
+# Manager release pinned in release/manager.env (tools/release_build.sh). No
+# secret: the manager release is already signed and is checked against
+# release/manager-public.pem. Run by hand, it builds without publishing.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: release-${{ github.ref }}
+
+jobs:
+  meta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      manager: ${{ steps.meta.outputs.manager }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: meta
+        name: Version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"; exit 1
+          fi
+          source release/manager.env
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "manager=$MANAGER_VERSION" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: meta
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux-x64
+            os: ubuntu-24.04
+          - platform: windows-x64
+            os: ubuntu-24.04
+          - platform: macos
+            os: macos-15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Linux window system libraries
+        if: matrix.platform == 'linux-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libx11-xcb-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - name: Install MinGW
+        if: matrix.platform == 'windows-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+      - name: Install Rust toolchain
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+          case "$PLATFORM" in
+            linux-x64) rustup target add x86_64-unknown-linux-gnu ;;
+            windows-x64) rustup target add x86_64-pc-windows-gnu ;;
+            macos) rustup target add aarch64-apple-darwin x86_64-apple-darwin ;;
+          esac
+      - name: Build
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: tools/release_build.sh "$PLATFORM" dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          MANAGER: ${{ needs.meta.outputs.manager }}
+        run: |
+          name="nbt-manager-installer-$VERSION"
+          files=("$name-windows-x64.zip" "$name-macos.zip" "$name-linux-x64.tar.gz")
+          (cd dist && sha256sum "${files[@]}" >SHA256SUMS)
+          cat >notes.md <<EOF
+          NBT Manager Installer $VERSION, carrying [NBT Manager $MANAGER](https://github.com/NBTFoundry/manager/releases/tag/v$MANAGER). Built from $GITHUB_SHA by [this workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID).
+
+          | Download | For |
+          | --- | --- |
+          | \`$name-windows-x64.zip\` | Windows 10 or 11 (64-bit): run \`nbt-manager-installer.exe\` |
+          | \`$name-macos.zip\` | macOS 10.13 or later, Apple silicon and Intel: open \`NBT Manager Installer.app\` |
+          | \`$name-linux-x64.tar.gz\` | Linux (64-bit, X11 or Wayland): run \`nbt-manager-installer\` |
+
+          The programs are not signed by a publisher: Windows asks to confirm (More info, Run anyway), macOS to allow it (System Settings, Privacy & Security, Open Anyway). Check a download against \`SHA256SUMS\`.
+
+          **Installing or modifying this software can brick your head unit.** Read the [disclaimer](https://github.com/NBTFoundry/installer/blob/main/DISCLAIMER.md) first.
+          EOF
+          prerelease=()
+          [[ "$VERSION" == 0.* ]] && prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "NBT Manager Installer $VERSION" \
+            --notes-file notes.md "${prerelease[@]}" "${files[@]/#/dist/}" dist/SHA256SUMS

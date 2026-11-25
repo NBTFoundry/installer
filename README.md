@@ -58,6 +58,13 @@ flowchart LR
   G --> H["Restart the head unit<br/>to load the iDrive plugin"]
 ```
 
+## Download
+
+[Releases](https://github.com/NBTFoundry/installer/releases): Windows (64-bit),
+macOS (Apple silicon and Intel) and Linux (64-bit), each with the NBT Manager
+release named in its notes. The programs are not signed by a publisher:
+Windows and macOS ask to confirm the first start.
+
 ## Build and test
 
 Rust 1.99 or later.
@@ -112,6 +119,12 @@ the release and then this application (`NBT_INSTALLER_DIR`, default
 `../installer`). A test application can be embedded too: `NBT_TEST_APP_PACKAGE`,
 `NBT_TEST_APP_KEY` and `NBT_TEST_APP_COMPAT`, all three or none. Development
 builds may omit everything and report that no release is bundled.
+
+**Published downloads** come from a `vX.Y.Z` tag (the version in `Cargo.toml`):
+`.github/workflows/release.yml` runs `tools/release_build.sh` per platform with
+the public manager release pinned in `release/manager.env` (version and
+SHA-256), checked against `release/manager-public.pem`. They carry no test
+application. A new manager release: raise both pins, bump the version, tag.
 
 ## Install and Update
 
