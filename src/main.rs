@@ -38,6 +38,8 @@ struct App {
     receiver: Option<mpsc::Receiver<ssh::Event>>,
     commands: Option<UnboundedSender<ssh::Command>>,
     activation_confirmation: Option<(String, Option<String>, oneshot::Sender<bool>)>,
+    /// NBTApps found before an Install or Update: move it aside? (nbtapps.rs)
+    nbtapps_confirmation: Option<oneshot::Sender<bool>>,
     connected: bool,
     target: bool,
     bundle: Option<bundle::Bundle>,
@@ -91,6 +93,7 @@ impl Default for App {
             receiver: None,
             commands: None,
             activation_confirmation: None,
+            nbtapps_confirmation: None,
             connected: false,
             target: false,
             bundle,
@@ -326,6 +329,9 @@ impl App {
                     hint,
                     respond,
                 } => self.activation_confirmation = Some((host, hint, respond)),
+                ssh::Event::ConfirmRemoveNbtApps { respond, .. } => {
+                    self.nbtapps_confirmation = Some(respond)
+                }
                 ssh::Event::Note(message) => self.log(message),
                 ssh::Event::Detail(message) => self.detail(message),
                 ssh::Event::Connected => {
@@ -394,6 +400,7 @@ impl App {
                     self.receiver = None;
                     self.commands = None;
                     self.activation_confirmation = None;
+                    self.nbtapps_confirmation = None;
                     self.restart_prompt = false;
                 }
             }
@@ -636,6 +643,27 @@ impl eframe::App for App {
                 });
             if let Some(accept) = accept
                 && let Some((_, _, respond)) = self.activation_confirmation.take()
+            {
+                let _ = respond.send(accept);
+            }
+        }
+        if self.nbtapps_confirmation.is_some() {
+            let mut accept = None;
+            egui::Window::new("NBTApps is installed")
+                .collapsible(false).resizable(false)
+                .show(ui.ctx(), |ui| {
+                    ui.set_max_width(420.0);
+                    ui.label("This head unit also has NBTApps. Its iDrive entry and NBT Manager's ask iDrive for the same place, so only one of them can load.");
+                    ui.add_space(4.0);
+                    ui.label("Remove NBTApps moves its agent and its iDrive entry aside (renamed, not deleted: moving them back restores them). Applications installed with NBTApps stay on the head unit. Cancel stops here and changes nothing.");
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Remove NBTApps and continue").clicked() { accept = Some(true); }
+                        if ui.button("Cancel").clicked() { accept = Some(false); }
+                    });
+                });
+            if let Some(accept) = accept
+                && let Some(respond) = self.nbtapps_confirmation.take()
             {
                 let _ = respond.send(accept);
             }

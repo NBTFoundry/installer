@@ -32,7 +32,9 @@ Rules:
   core/tests/fixtures/release/regenerate.py`. A new manifest field breaks
   older installers: say so to the user before adding one.
 - **Never reboot the head unit on its own**, never log passwords, never
-  remove anything outside NBT Manager's own folders. Errors the user can act
+  remove anything outside NBT Manager's own folders. The one exception is
+  NBTApps (`core/src/nbtapps.rs`), and only after the user says yes: moved
+  aside (renamed), never deleted. Errors the user can act
   on go through `known_error` in `ssh.rs`.
 - **Phone:** the same core runs in the phone app. After a core change, the
   app rebuilds it with `yarn installer-core` (NBTFoundry/mobile-app,

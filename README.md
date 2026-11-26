@@ -148,6 +148,16 @@ iDrive plugin; `REFRESHED` or `REFRESHED plugin`). The installed launcher is nev
 run, so an older launcher needs no preparation. On a head unit without NBT
 Manager, Update says to use Install.
 
+**NBTApps.** Before Install and Update the installer looks for NBTApps
+(`/var/opt/nbtapp`, `Plugins/NbtApp`; `core/src/nbtapps.rs`). Its iDrive entry
+asks iDrive for the same place as NBT Manager's, so only one of them loads. When
+it is there, the installer asks: **Remove NBTApps and continue** stops its agent
+and, once the partition is writable, moves its two folders aside, renamed with
+`.removed-<time>` (`/var/opt/nbtapp.removed-…`,
+`/opt/hmi/ID5/data/ro/NbtApp.removed-…`): nothing is deleted, and moving them
+back restores it. Applications installed with NBTApps stay. **Cancel** stops
+the operation with nothing changed.
+
 A failure leaves the connection usable, so Install can be retried at once. After
 an install, or an update that replaced the iDrive plugin, the installer offers to
 restart the head unit; the application never reboots it on its own.

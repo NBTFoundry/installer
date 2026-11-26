@@ -13,6 +13,7 @@ pub mod bench;
 pub mod bundle;
 pub mod collect;
 pub mod discovery;
+pub mod nbtapps;
 pub mod net;
 pub mod relay_codec;
 pub mod release;
