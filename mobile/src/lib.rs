@@ -177,12 +177,6 @@ pub enum InstallerEvent {
         host: String,
         hint: Option<String>,
     },
-    /// NBTApps is on the head unit; ask whether to move it aside, then call
-    /// `confirm_remove_nbtapps` (no stops the Install or Update).
-    ConfirmRemoveNbtApps {
-        agent: bool,
-        plugin: bool,
-    },
     Note {
         text: String,
     },
@@ -293,11 +287,6 @@ impl Session {
         }))
     }
 
-    /// The user's answer to `ConfirmRemoveNbtApps` (the same open question).
-    pub fn confirm_remove_nbtapps(&self, approve: bool) {
-        self.confirm_activation(approve);
-    }
-
     /// The user's answer to `ConfirmActivation`.
     pub fn confirm_activation(&self, approve: bool) {
         if let Some(respond) = self
@@ -364,14 +353,6 @@ fn convert(event: ssh::Event, pending: &Mutex<Option<oneshot::Sender<bool>>>) ->
         } => {
             *pending.lock().unwrap_or_else(|p| p.into_inner()) = Some(respond);
             InstallerEvent::ConfirmActivation { host, hint }
-        }
-        E::ConfirmRemoveNbtApps {
-            agent,
-            plugin,
-            respond,
-        } => {
-            *pending.lock().unwrap_or_else(|p| p.into_inner()) = Some(respond);
-            InstallerEvent::ConfirmRemoveNbtApps { agent, plugin }
         }
         E::Note(text) => InstallerEvent::Note { text },
         E::Detail(text) => InstallerEvent::Detail { text },

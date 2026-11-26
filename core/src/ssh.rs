@@ -2,7 +2,7 @@
 #[path = "ssh_reconnect.rs"]
 mod reconnect;
 
-use crate::{activation, bench, discovery, nbtapps, sweep};
+use crate::{activation, bench, discovery, sweep};
 use rand::TryRng;
 use russh::{
     ChannelMsg, Preferred, client,
@@ -28,13 +28,6 @@ use zeroize::Zeroizing;
 
 pub enum Event {
     Message(&'static str),
-    /// NBTApps is on the head unit (nbtapps.rs): ask whether to move it aside
-    /// before the Install or Update that found it; no stops the operation.
-    ConfirmRemoveNbtApps {
-        agent: bool,
-        plugin: bool,
-        respond: oneshot::Sender<bool>,
-    },
     /// SSH did not answer at `host`; ask whether to enable it. `hint` says
     /// why the address is unreachable from this computer, when it is.
     ConfirmActivation {
@@ -728,113 +721,6 @@ async fn make_read_only(link: &Link, events: &mpsc::Sender<Event>) {
 
 const READ_ONLY_STEP: &str = "Making the iDrive plugin folder read-only again";
 
-/// The answer to "NBTApps is installed: move it aside?" (nbtapps.rs).
-enum NbtAppsAnswer {
-    /// Not there, or moved aside at these seconds once the partition is writable.
-    Go(Option<u64>),
-    /// Declined, or the check failed: the operation stops with this reason.
-    Stop(String),
-    /// The session was closed while the question was open.
-    Disconnect,
-}
-
-/* Before Install and Update: look for NBTApps (read-only) and, when it is
- * there, ask. Nothing is changed here; the move happens once the plugin
- * partition is writable (move_nbtapps_aside). */
-async fn ask_nbtapps(
-    link: &Link,
-    events: &mpsc::Sender<Event>,
-    commands: &mut async_mpsc::UnboundedReceiver<Command>,
-) -> NbtAppsAnswer {
-    let command = nbtapps::check_command();
-    let _ = events.send(Event::Detail(format!("Looking for NBTApps: {command}")));
-    let found = match execute(link, &command, &[], 64, 30, |_| {}).await {
-        Ok(output) if output.exit == Some(0) && output.signal.is_none() && !output.truncated => {
-            nbtapps::parse_check(&output.stdout)
-        }
-        Ok(output) => {
-            let _ = events.send(Event::Detail(format!(
-                "Looking for NBTApps: {}",
-                output.describe()
-            )));
-            None
-        }
-        Err(error) => {
-            let _ = events.send(Event::Detail(format!("Looking for NBTApps: {error}")));
-            None
-        }
-    };
-    let Some(found) = found else {
-        return NbtAppsAnswer::Stop("Looking for NBTApps on the head unit failed.".into());
-    };
-    if !found.any() {
-        return NbtAppsAnswer::Go(None);
-    }
-    let _ = events.send(Event::Note(format!(
-        "NBTApps is installed on this head unit ({}).",
-        match (found.agent, found.plugin) {
-            (true, true) => "its agent and its iDrive plugin",
-            (true, false) => "its agent",
-            _ => "its iDrive plugin",
-        }
-    )));
-    let (send, receive) = oneshot::channel();
-    if events
-        .send(Event::ConfirmRemoveNbtApps {
-            agent: found.agent,
-            plugin: found.plugin,
-            respond: send,
-        })
-        .is_err()
-    {
-        return NbtAppsAnswer::Disconnect;
-    }
-    let approved = tokio::select! {
-        answer = receive => answer.unwrap_or(false),
-        _ = commands.recv() => return NbtAppsAnswer::Disconnect,
-    };
-    if !approved {
-        return NbtAppsAnswer::Stop(
-            "Stopped: NBTApps is still installed, and only one of the two iDrive entries can load."
-                .into(),
-        );
-    }
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or(0);
-    NbtAppsAnswer::Go(Some(stamp))
-}
-
-/* With the plugin partition writable: stop NBTApps' agent and move its
- * folders aside, when the user agreed (nbtapps.rs). */
-async fn move_nbtapps_aside(
-    link: &Link,
-    stamp: Option<u64>,
-    events: &mpsc::Sender<Event>,
-) -> Result<(), String> {
-    let Some(stamp) = stamp else {
-        return Ok(());
-    };
-    let _ = events.send(Event::Message("Moving NBTApps aside…"));
-    step(
-        link,
-        "Moving NBTApps aside",
-        &nbtapps::removal_command(stamp),
-        &[],
-        b"REMOVED\n",
-        60,
-        events,
-    )
-    .await?;
-    let _ = events.send(Event::Note(format!(
-        "NBTApps was moved aside: {}.removed-{stamp} and {}/NbtApp.removed-{stamp}. Applications it installed stay on the head unit.",
-        nbtapps::AGENT,
-        nbtapps::HMI_RO
-    )));
-    Ok(())
-}
-
 fn installer_valid(
     launcher: &[u8],
     release: &[u8],
@@ -869,7 +755,6 @@ const INSTALL_STEPS: [&str; 5] = [
  * refuses), always remove the staging folder, and always remount read-only.
  * The staging path is generated locally; every shell argument is fixed or
  * validated. */
-#[allow(clippy::too_many_arguments)]
 async fn install(
     link: &Link,
     launcher: &'static [u8],
@@ -877,7 +762,6 @@ async fn install(
     key: &'static [u8],
     digest: &str,
     compat: &str,
-    nbtapps: Option<u64>,
     events: &mpsc::Sender<Event>,
 ) -> Result<(), String> {
     if !installer_valid(launcher, release, key, digest, compat) {
@@ -888,16 +772,12 @@ async fn install(
             release.len()
         ));
     }
-    let result = install_writable(
-        link, launcher, release, key, digest, compat, nbtapps, events,
-    )
-    .await;
+    let result = install_writable(link, launcher, release, key, digest, compat, events).await;
     phase(events, 4, INSTALL_STEPS.len(), INSTALL_STEPS[4], 0);
     make_read_only(link, events).await;
     result
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn install_writable(
     link: &Link,
     launcher: &'static [u8],
@@ -905,14 +785,12 @@ async fn install_writable(
     key: &'static [u8],
     digest: &str,
     compat: &str,
-    nbtapps: Option<u64>,
     events: &mpsc::Sender<Event>,
 ) -> Result<(), String> {
     let count = INSTALL_STEPS.len();
     let path = format!("/tmp/nbt-manager-{}", nonce()?);
     phase(events, 0, count, INSTALL_STEPS[0], 0);
     make_writable(link, events).await?;
-    move_nbtapps_aside(link, nbtapps, events).await?;
     let _ = events.send(Event::Detail(format!(
         "Sending launcher ({} bytes), key ({} bytes) and release ({} bytes) to {path}.",
         launcher.len(),
@@ -992,7 +870,6 @@ async fn update(
     launcher: &'static [u8],
     release: &'static [u8],
     digest: &str,
-    nbtapps: Option<u64>,
     events: &mpsc::Sender<Event>,
 ) -> Result<(), String> {
     if release.is_empty()
@@ -1003,7 +880,7 @@ async fn update(
     {
         return Err("The bundled release or launcher is invalid.".into());
     }
-    let result = update_writable(link, launcher, release, digest, nbtapps, events).await;
+    let result = update_writable(link, launcher, release, digest, events).await;
     phase(events, 5, UPDATE_STEPS.len(), UPDATE_STEPS[5], 0);
     make_read_only(link, events).await;
     result
@@ -1014,14 +891,12 @@ async fn update_writable(
     launcher: &'static [u8],
     release: &'static [u8],
     digest: &str,
-    nbtapps: Option<u64>,
     events: &mpsc::Sender<Event>,
 ) -> Result<(), String> {
     let count = UPDATE_STEPS.len();
     let path = format!("/tmp/nbt-manager-{}", nonce()?);
     phase(events, 0, count, UPDATE_STEPS[0], 0);
     make_writable(link, events).await?;
-    move_nbtapps_aside(link, nbtapps, events).await?;
     phase(events, 1, count, UPDATE_STEPS[1], launcher.len());
     // A failed mkdir means the folder is not ours: nothing to clean up.
     step(
@@ -1654,11 +1529,7 @@ async fn run(
                 // Each operation checks the head unit again: `target` only
                 // enables the buttons.
                 Some(Command::Install { launcher, release, key, sha256, compatibility }) => {
-                    let result = match ask_nbtapps(&link, &events, &mut commands).await {
-                        NbtAppsAnswer::Go(nbtapps) => install(&link, launcher, release, key, &sha256, &compatibility, nbtapps, &events).await,
-                        NbtAppsAnswer::Stop(reason) => Err(reason),
-                        NbtAppsAnswer::Disconnect => break,
-                    };
+                    let result = install(&link, launcher, release, key, &sha256, &compatibility, &events).await;
                     match &result {
                         // A new plugin loads only when iDrive restarts.
                         Ok(()) => { let _ = events.send(Event::RestartNeeded); }
@@ -1667,11 +1538,7 @@ async fn run(
                     let _ = events.send(Event::InstallFinished(result.is_ok()));
                 }
                 Some(Command::Update { launcher, release, sha256 }) => {
-                    let result = match ask_nbtapps(&link, &events, &mut commands).await {
-                        NbtAppsAnswer::Go(nbtapps) => update(&link, launcher, release, &sha256, nbtapps, &events).await,
-                        NbtAppsAnswer::Stop(reason) => Err(reason),
-                        NbtAppsAnswer::Disconnect => break,
-                    };
+                    let result = update(&link, launcher, release, &sha256, &events).await;
                     if let Err(error) = &result {
                         let _ = events.send(Event::Note(error.clone()));
                     }
@@ -1882,15 +1749,6 @@ mod tests {
                 session.close(channel)?;
                 return Ok(());
             }
-            // No NBTApps on the scripted head units (the shell target looks for real).
-            if self.shell.is_none() && command == nbtapps::check_command().as_bytes() {
-                session.channel_success(channel)?;
-                session.data(channel, b"CHECKED\n".to_vec())?;
-                session.exit_status_request(channel, 0)?;
-                session.eof(channel)?;
-                session.close(channel)?;
-                return Ok(());
-            }
             if self.shell.is_some() && command != REMOTE_SYSTEM.as_bytes() {
                 self.upload = Some((String::from_utf8_lossy(command).into_owned(), Vec::new()));
                 session.channel_success(channel)?;
@@ -1974,11 +1832,6 @@ mod tests {
                         .replace(
                             bench::CAPTURE,
                             hmi_root.join("NbtCapture").to_str().unwrap(),
-                        )
-                        .replace(nbtapps::HMI_RO, hmi_root.to_str().unwrap())
-                        .replace(
-                            nbtapps::AGENT,
-                            shell.root.with_file_name("nbtapp").to_str().unwrap(),
                         )
                         .replace(bench::ROOT, shell.root.to_str().unwrap());
                     let mut child = Command::new("/bin/sh")
@@ -2290,8 +2143,6 @@ mod tests {
         }
         commands.push(bench::REMOUNT.into());
         commands.push(bench::REMOUNT_READ_ONLY.into());
-        commands.push(nbtapps::check_command());
-        commands.push(nbtapps::removal_command(1795680000));
         commands.push(bench::provision("nbt-test-1", 1, 1, &"ab".repeat(32)).unwrap());
         commands.push(format!(
             "{path}/launcher --stage-update 1 {}",
@@ -3110,105 +2961,6 @@ mod tests {
             assert!(details.iter().any(|line| line == last), "{details:?}");
             commands.send(Command::Disconnect).unwrap();
         }
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// NBTApps on the head unit (nbtapps.rs): Install asks first; Cancel stops
-    /// with nothing changed, yes moves its agent and its iDrive plugin aside
-    /// (renamed, not deleted) once the plugin partition is writable.
-    #[cfg(unix)]
-    #[test]
-    fn install_asks_before_moving_nbtapps_aside() {
-        let dir = std::env::temp_dir().join(format!("nbt-nbtapps-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let plugin = dir.join("Plugins/NbtApp");
-        let agent = dir.join("nbtapp/agent");
-        std::fs::create_dir_all(&plugin).unwrap();
-        std::fs::create_dir_all(&agent).unwrap();
-        std::fs::write(plugin.join("libNbtApp.so"), b"plugin").unwrap();
-        std::fs::write(agent.join("nbtagent"), b"agent").unwrap();
-        let port = serve_target(
-            0,
-            None,
-            Some(ShellTarget {
-                root: dir.join("root"),
-                plugins: dir.join("Plugins"),
-                launcher: None,
-            }),
-            Algorithm::Ed25519,
-        );
-        let (commands, receive) = connect_trusted(port);
-        let install = || Command::Install {
-            launcher: b"test-launcher",
-            release: b"test-release",
-            key: b"key",
-            sha256: crate::release::hash_hex(b"test-release"),
-            compatibility: "demo-1".into(),
-        };
-        let mut notes = Vec::new();
-        for approve in [false, true] {
-            commands.send(install()).unwrap();
-            let mut asked = false;
-            loop {
-                match receive.recv_timeout(Duration::from_secs(60)).unwrap() {
-                    Event::ConfirmRemoveNbtApps {
-                        agent,
-                        plugin,
-                        respond,
-                    } => {
-                        assert!(agent && plugin && !asked);
-                        asked = true;
-                        respond.send(approve).unwrap();
-                    }
-                    Event::Note(note) => notes.push(note),
-                    // The scripted launcher is not a real one: the install
-                    // itself fails after the move either way.
-                    Event::InstallFinished(ok) => {
-                        assert!(!ok);
-                        break;
-                    }
-                    Event::Finished(message) => panic!("{message}"),
-                    _ => {}
-                }
-            }
-            assert!(asked);
-            if !approve {
-                assert!(plugin.join("libNbtApp.so").is_file() && agent.join("nbtagent").is_file());
-                assert!(
-                    notes
-                        .iter()
-                        .any(|n| n.starts_with("Stopped: NBTApps is still installed")),
-                    "{notes:?}"
-                );
-            }
-        }
-        assert!(!dir.join("Plugins/NbtApp").exists() && !dir.join("nbtapp").exists());
-        let moved: Vec<String> = std::fs::read_dir(&dir)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-            .filter(|name| name.contains(".removed-"))
-            .collect();
-        assert_eq!(moved.len(), 2, "{moved:?}");
-        let parked = |prefix: &str| dir.join(moved.iter().find(|n| n.starts_with(prefix)).unwrap());
-        assert!(parked("NbtApp.removed-").join("libNbtApp.so").is_file());
-        assert!(parked("nbtapp.removed-").join("agent/nbtagent").is_file());
-        assert!(
-            notes
-                .iter()
-                .any(|n| n.starts_with("NBTApps was moved aside")),
-            "{notes:?}"
-        );
-        // Found once moved: nothing to ask the next time.
-        commands.send(install()).unwrap();
-        loop {
-            match receive.recv_timeout(Duration::from_secs(60)).unwrap() {
-                Event::ConfirmRemoveNbtApps { .. } => panic!("asked again"),
-                Event::InstallFinished(_) => break,
-                Event::Finished(message) => panic!("{message}"),
-                _ => {}
-            }
-        }
-        commands.send(Command::Disconnect).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 
