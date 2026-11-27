@@ -2232,7 +2232,7 @@ dependencies = [
 
 [[package]]
 name = "nbt-installer-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures-util",
  "if-addrs",
@@ -2249,7 +2249,7 @@ dependencies = [
 
 [[package]]
 name = "nbt-installer-mobile"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "nbt-installer-core",
  "tokio",
@@ -2259,7 +2259,7 @@ dependencies = [
 
 [[package]]
 name = "nbt-manager-installer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "directories",
  "eframe",

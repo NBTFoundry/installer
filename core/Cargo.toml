@@ -2,7 +2,7 @@
 [package]
 license = "MPL-2.0"
 name = "nbt-installer-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 description = "The installer's SSH, gateway search, activation relay and embedded release, shared by the Windows installer and the phone app."

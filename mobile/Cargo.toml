@@ -2,7 +2,7 @@
 [package]
 license = "MPL-2.0"
 name = "nbt-installer-mobile"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 description = "The installer core for the phone app, through UniFFI."
